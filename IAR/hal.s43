@@ -1,0 +1,169 @@
+#include "bsp.h"
+              
+
+
+                MODULE    HAL
+                PUBLIC    SysConfig,LCD_DRIVER,PBs_handler,Lcd_stobe
+                PUBLIC    Delay5,Delay15,Delay02,DelayBounce
+                PUBLIC    LCD_CLR,Line1,Line2,CurR,ADC10_ISR
+                EXTERN    Lcd_cmd,state,GPIOconfig,ConfADC,find_signal,calc,sum
+
+                RSEG      CODE
+           
+;----------------------------------------------------------------------------------------------
+;             System configuration  
+;----------------------------------------------------------------------------------------------
+SysConfig
+          CALL   #GPIOconfig
+          CALL   #ConfADC
+          ret
+ 
+ ;------------------------------------------------------------------------------------------ 
+;                LCD DRIVER
+;------------------------------------------------------------------------------------------
+LCD_DRIVER  pop R4 ; RETURN ADRESS
+            POP R10 ;THE CHAR WE WANT TO SHOW
+            call #Delay5
+            mov.b #0x00,LCDOUT
+            bis.b #RS, LCDCONOUT
+            mov.b R10, LCDOUT
+            call  #Lcd_stobe
+            bic.b #RS,LCDCONOUT
+            push R4 
+            ret
+            
+;----------------------------------------------------------------------- 
+;            PORT2 Interrupt Service Routine
+;-----------------------------------------------------------------------
+PBs_handler  
+             push.w #debounceVal
+             call   #DelayBounce    
+             bit.b  #PB0,PBIFG   ;check if PB0 is pushed
+             jnz    PB0sel 
+             bit.b  #PB1,PBIFG   ;check if PB1 is pushed
+             jnz    PB1sel
+             bit.b  #PB2,PBIFG   ;check if PB1 is pushed
+             jnz    PB2sel
+             reti               
+             
+PB0sel       mov    #1,state
+             mov    #PB0,R4
+             call #LCD_CLR; which flag to clear
+             jmp    exitLPM0
+PB1sel       mov    #2,state
+             mov    #PB1,R4     ; which flag to clear
+             jmp    exitLPM0
+PB2sel       mov    #3,state
+             mov    #PB2,R4     ; which flag to clear
+             jmp    exitLPM0
+
+
+exitLPM0     bic    #CPUOFF,0(SP)  ; Exit LMP0
+             bic.b  R4,PBIFG 
+             bis.w  #GIE,SR
+             reti          
+             
+
+;----------------------------------------------------------------------------------------------
+;             Delay
+;----------------------------------------------------------------------------------------------
+            
+Delay5      clr  R5
+            mov.w #1740,R5
+D5          dec.w R5
+            jnz   D5
+            RET
+            
+Delay15     clr  R5
+            mov.w #5240,R5
+D15         dec.w R5
+            jnz   D15
+            RET
+            
+Delay02     clr  R5
+            mov.w #69,R5
+D02         dec.w R5
+            jnz   D02
+            RET 
+            
+DelayBounce pop R4;return value
+            pop R5;debouncetime
+Deboun      dec.w R5
+            jnz   Deboun
+            push R4
+            RET
+            
+            
+            
+ ;----------------------------------------------------------------------------------------------
+;             LCD-options 
+;----------------------------------------------------------------------------------------------
+ 
+ 
+LCD_CLR     PUSH #0x01
+            CALL #Lcd_cmd
+            RET
+            
+Line1       PUSH #0x02
+            CALL #Lcd_cmd
+            RET
+            
+
+Line2       PUSH #0xC0
+            CALL #Lcd_cmd
+            RET
+            
+CurR        PUSH #0x14 //SPACE
+            CALL #Lcd_cmd
+            RET               
+            
+                    
+;----------------------------------------------------------------------------------------------
+;             Lcd_stobe
+;----------------------------------------------------------------------------------------------           
+             
+Lcd_stobe   
+            bis.b #0x20,LCDCONOUT
+            NOP
+            NOP
+            bic.b #0x20,LCDCONOUT
+            RET  
+            
+            
+            
+;-------------------------------------------------------------------------------            
+;                           ADC10 Interrupt Routine 
+;-------------------------------------------------------------------------------
+
+ADC10_ISR   bic #CPUOFF+GIE,0(SP)  
+            bic #ADC10SC,&ADC10CTL0
+            cmp #1, state
+            jne state2
+            call   #find_signal
+            reti
+state2      call #sum            
+            reti
+              
+             //nop
+            /* bic #ADC10IE,&ADC10CTL0
+             incd   R12
+             cmp    #1,state
+             jnz    lop
+             cmp    #32, R12
+             jnz    notendarr
+             call   #calc
+             jmp    exit
+notendarr    call   #find_signal
+             jmp    exit
+lop          cmp    #2,state
+             //jz     Avg
+             bic.w  #CPUOFF,0(SP)  ;Exit Sleep Mode*/
+             
+   
+
+           
+
+                        
+;------------------------------------------------------------------------------------------ 
+                ENDMOD
+                END

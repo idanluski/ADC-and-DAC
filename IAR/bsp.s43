@@ -1,0 +1,104 @@
+#include "bsp.h"
+
+
+
+            
+                MODULE    BSP
+                PUBLIC    GPIOconfig,Lcd_cmd,ConfADC
+                EXTERN    Delay15, Delay5, Delay02, Lcd_stobe,PBs_handler,main
+                EXTERN    LCD_CLR,Line1,Line2,CurR,ADC10_ISR
+                RSEG      CODE
+           
+;----------------------------------------------------------------------------------------------
+;             GPIO configuration  
+;----------------------------------------------------------------------------------------------
+GPIOconfig
+             ;POP R12
+PBSETUP      BIC.B   #0x07, PBSEL  //PULL - UP
+             BIS.B   #0x08, PBSEL
+             BIC.B   #0x07, PBDIR
+             BIS.B   #0x03, PBIES
+             BIC.B   #0x04, PBIES
+             BIS.B   #0x07, PBIE
+             BIC.B   #0x07, PBIFG
+             
+
+             
+             
+            
+LCDSETUP     BIC.B   #0xE0,  LCDCONSEL//CON
+             BIS.B   #0xE0,  LCDCONDIR
+             bic.b   #0xFF,LCDSEL
+             bis.b   #0xFF, LCDDIR
+             
+            
+    
+LCDINIT     bic.b  #0xE0,LCDCONOUT
+             call   #Delay15
+             mov.b  #0x3F,LCDOUT
+             call   #Lcd_stobe
+             call   #Delay5
+             mov.b  #0x3F,LCDOUT
+             call   #Lcd_stobe
+             call   #Delay02
+             mov.b  #0x3F,LCDOUT
+             call   #Lcd_stobe
+             PUSH.B #0x3C 
+             call   #Lcd_cmd 
+             PUSH.B #0x0F
+             call   #Lcd_cmd 
+             PUSH.B #0x01
+             call   #Lcd_cmd 
+
+             PUSH.B #0x06
+             call   #Lcd_cmd 
+             PUSH.B #0x80
+             call   #Lcd_cmd 
+             PUSH.B #0x02
+             call   #Lcd_cmd
+             
+             
+         
+             RET
+             
+             
+                        
+;----------------------------------------------------------------------------------------------
+;             LCD COMMAND ROUTIN  
+;----------------------------------------------------------------------------------------------
+Lcd_cmd     POP R6  //RETURN ADRESS     
+            POP.B R12
+            call  #Delay5
+            mov.b R12,LCDOUT
+            call  #Lcd_stobe
+            PUSH R6
+            RET
+            
+            
+            
+            
+            
+;----------------------------------------------------------------------------------------------
+;             ADC configuration  
+;----------------------------------------------------------------------------------------------
+ConfADC  mov.w #ADC10SSEL_0+INCH_3,&ADC10CTL1 //5*10^6, repeat single channel,A3,  
+         mov.w #SREF_0+ADC10ON+ADC10IE+ADC10SHT_3+ENC,&ADC10CTL0  //reference volt, x64
+         mov.b #BIT3,&ADC10AE0  //enable analog input to A3
+         RET
+            
+            
+            
+            
+            
+            
+;-------------------------------------------------------------------------------------------------------------------------------------------             
+            COMMON  INTVEC                  ; Interrupt Vectors-Begins a common segment with name of INTVEC 
+;-------------------------------------------------------------------------------------------------------------------------------------------
+            ORG     PORT1_VECTOR            ;PORT2 Interrupt Vector
+            DW      PBs_handler
+            ORG     RESET_VECTOR            ; MSP430 RESET Vector
+            DW      main  
+            ORG     ADC10_VECTOR
+            DW      ADC10_ISR
+            ENDMOD
+            END

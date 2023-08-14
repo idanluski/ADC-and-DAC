@@ -1,0 +1,353 @@
+#include "bsp.h"
+
+
+;------------------------------------------------------------------------------
+;                macro
+;--------------------------------------------------------------------------------
+mul7     MACRO num1
+         LOCAL loop_mul
+         LOCAL exit_mul
+         clr R15
+         mov  num1,R14
+         mov #6, R15
+loop_mul cmp #0, R15
+         jeq exit_mul
+         dec R15
+         add R14, num1
+         jmp loop_mul
+exit_mul ENDM  
+
+
+rra6     MACRO num3
+         rra num3
+         rra num3
+         rra num3
+         rra num3
+         rra num3
+         rra num3
+         ENDM
+         
+rra11     MACRO num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         rra num4
+         ENDM
+         
+
+
+;----------------------------------------------------------------------------------------------- 
+;----------------------------------------------------------------------------------------------- 
+
+                MODULE    API
+                PUBLIC    clearline1,clearline2,print_string,find_signal,calc,sampeling,avg,sum
+                EXTERN    Lcd_cmd,LCD_DRIVER,sec_timer,time_laps
+                EXTERN    delay, state,sample_arr,Dsample_arr, DDsample_arr,Delay15,Delay02
+                EXTERN    firststr,masor,ppwm,sinus,cur
+                EXTERN    LCD_CLR,Line1,Line2,CurR,flag,mesima22,mesima2
+                RSEG      CODE  
+                
+
+;-------------------------------------------------------------------------------------------          
+;          clear lines
+;---------------------------------------------------------------------------------------------            
+clearline1 call #Line1
+           mov #0,R7
+loop200    
+           push #' '
+           call #LCD_DRIVER
+           inc R7
+           cmp #16,R7
+           jnz loop200
+           ret
+           
+clearline2 call #Line2
+           mov #0,R7
+loop201   
+           push #' '
+           call #LCD_DRIVER
+           inc R7
+           cmp #16,R7
+           jnz loop201
+           ret           
+           
+;-------------------------------------------------------------------------------------------          
+;           print string to lcd
+;---------------------------------------------------------------------------------------------           
+           
+print_string pop R7 //return adress
+             pop R8 //string adress
+loopi        cmp.b #0,0(R8)
+             JZ exit1
+             push.b @R8
+             call #LCD_DRIVER
+             inc  R8
+             jmp loopi
+exit1        push R7
+             ret  
+             
+;-------------------------------------------------------------------------------------------          
+;           find_signal
+;---------------------------------------------------------------------------------------------             
+             
+find_signal mov #sample_arr,R11
+            mov #Dsample_arr,R14
+            cmp #2, R12 ;insert first sample
+            jne D
+            mov &ADC10MEM, 0(R11)
+            //call #Delay02
+            and #0x03ff,0(R11)
+            jmp exit
+D           cmp #4 ,R12 ;insert first Dsample
+            jne regular
+            mov &ADC10MEM, 2(R11)
+            and #0x03ff,2(R11)
+            mov &ADC10MEM, R9
+            and #0x03ff,R9
+            sub 0(R11), R9
+            jn invert
+            jmp concon
+invert      xor #0xffff,R9
+            add #1,R9
+            
+concon      mov R9, 0(R14)
+            and #0x03ff,0(R14)
+            jmp exit
+regular
+add_e       
+            add R12,R11 ;adress at R11
+            decd R11
+            mov &ADC10MEM, 0(R11)
+            and #0x03ff,0(R11)
+            mov &ADC10MEM, R15
+            and #0x03ff,R15
+            decd R11
+            SUB  @R11, R15  ; D in R15
+            jn invert2
+            jmp add_d
+invert2      xor #0xffff,R15
+            add #1,R15          
+
+add_d       
+            add R12,R14
+            decd  R14
+            decd  R14
+            mov   R15, 0(R14)
+            decd  R14
+            mov   R15, R13
+            sub   @R14, R13  ;DD in R13
+            jn invert3
+            jmp add_dd
+invert3      xor #0xffff,R13
+            add #1,R13
+            
+                
+add_dd      mov #DDsample_arr , R15
+            add R12,R15
+            decd  R15
+            decd  R15
+            decd  R15
+            mov   R13, 0(R15) 
+exit        ret   
+
+
+
+
+;-------------------------------------------------------------------------------------------          
+;           calc
+;---------------------------------------------------------------------------------------------
+calc     
+         bic #ADC10ON , &ADC10CTL0
+pwm      mov #Dsample_arr, R12
+         clr R15//counter to eval
+         clr R9//counter running on array
+back     cmp #63,R9
+         jz  exit_now
+         inc R9
+         mov @R12,R13//take derived value
+         incd R12
+         and #0x03ff,R13 //10 lsb bit
+         cmp #10,R13
+         jge  back
+         inc R15
+         jmp back
+         
+exit_now cmp #32,R15
+         jc  show1
+         
+triangle mov #DDsample_arr, R12
+         clr R15//counter to eval
+         clr R9//dd array counter
+back1    cmp #63,R9
+         jz  exit_now1
+         inc R9
+         mov @R12,R13//take derived value
+         incd R12
+         and #0x03ff,R13
+         cmp #8,R13
+         jge  back1
+         inc R15
+         jmp back1
+exit_now1 cmp #32,R15
+         jc  show2
+         jmp show3
+         
+show1    //push #ppwm
+         //call #print_string
+         mov #0,flag
+         jmp noder
+show2    //push #masor
+         //call #print_string
+         mov #1,flag
+         jmp noder
+show3    //push #sin
+         //call #print_string
+         mov #2,flag
+noder    call #Delay15
+         bis #ADC10ON , &ADC10CTL0
+         ret         
+         
+         
+;----------------------------------------------------------------------------------
+;                             sampeling
+;-----------------------------------------------------------------------------------
+         
+         
+sampeling 
+LOOP_SAMP CMP #1,state
+          jne exit_funcion
+          INCD R12
+          CMP #128,R12
+          JEQ EXIT_SAMP
+          bis #ADC10SC,&ADC10CTL0
+          bis #CPUOFF+GIE,SR
+          JMP LOOP_SAMP
+EXIT_SAMP CALL #calc
+
+          cmp  cur,flag
+          jne  chan
+          jmp  loop3
+          
+chan      call #clearline2
+          call #Line2
+          mov flag, cur
+          cmp #0,flag
+          jne chan1
+          push #ppwm
+          jmp print
+chan1     cmp #1,flag
+          jne chan2
+          push #masor
+          jmp print
+chan2     push #sinus
+          call #Line2
+print     call #print_string
+loop3     clr R12
+          jmp LOOP_SAMP
+exit_funcion ret    
+
+
+;----------------------------------------------------------------------------------
+;                             sum
+;-----------------------------------------------------------------------------------
+          
+sum add &ADC10MEM,R9
+    ret
+
+     
+;----------------------------------------------------------------------------------
+;                             avg
+;-----------------------------------------------------------------------------------    
+
+avg clr R9
+    clr R11
+    clr R14
+    CLR R13
+   cmp #2, state 
+    jne exit_state2
+      call #LCD_CLR
+      call #Line1
+      push #mesima2
+      call #print_string
+loop_sum cmp #64,R11 
+    jeq exit_sum
+    inc R11
+    bis #ADC10SC,&ADC10CTL0
+    bis #CPUOFF+GIE,SR
+    JMP loop_sum 
+exit_sum rra6 R9
+         mul7 R9 ;Q11
+         mov  R9,R14
+         mov  R9,R15
+         and  #0x1800, R14 ;left point
+         rra11 R14
+         add #48,R14
+         push R14
+         call #LCD_DRIVER
+;--------------------------------------------freq
+         and  #0x0780, R15 ; rigth piont
+         MOV  R15,R14
+         CLR R12
+         and  #0x00FF, R14
+         JNZ  ADD1
+         JMP  BIG
+ADD1     ADD #1,R12
+BIG      MOV R15,R14
+         AND #0X0100,R14
+         JNZ ADD12
+         JMP BIG1
+ADD12    ADD #12,R12
+BIG1     MOV R15,R14
+         AND #0X0200,R14
+         JNZ ADD25
+         JMP BIG2
+ADD25    ADD #25,R12
+BIG2     MOV R15,R14
+         AND #0X0400,R14
+         JZ CALC_FRAQ
+         ADD #50,R12
+CALC_FRAQ   PUSH R12
+            CALL #DEVIDE
+            push #mesima22
+            call #print_string
+            //bic #ADC10SC,&ADC10CTL0
+            //bis.w   #CPUOFF+GIE,SR
+         
+exit_state2 ret
+         
+         
+         
+         
+         
+DEVIDE POP R14//RETURN ADRESS
+       POP R15 //NUMBER DEVIDE
+       CLR R13
+LOOPD  CMP #10, R15
+       JL  SHOW_D
+       SUB #10,R15
+       INC R13
+       JMP LOOPD
+SHOW_D ADD #48,R13
+       ADD #48,R15
+       PUSH #46
+       CALL #LCD_DRIVER
+       PUSH R13
+       CALL #LCD_DRIVER
+       PUSH R15
+       CALL #LCD_DRIVER
+       PUSH R14
+       RET
+       
+       
+         
+         
+;----------------------------------------------------------------------------------------------
+ENDMOD             
+END

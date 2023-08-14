@@ -1,0 +1,123 @@
+#include <msp430g2553.h>     ;define controlled include file
+#include "bsp.h"
+
+
+
+            NAME    Main
+            PUBLIC state,main,sample_arr,Dsample_arr, DDsample_arr,flag
+            PUBLIC firststr,masor,ppwm,sinus,cur,mesima22,mesima2
+            EXTERN SysConfig,LCD_CLR,PBs_handler,print_string
+            EXTERN Line1,Line2,CurR,sampeling,avg
+           
+;-------------------------------------------------------------------------------
+            ORG     DataSegStart                  ; Begins a RAM segment
+;-------------------------------------------------------------------------------
+state         DW   0   ;start variable
+flag DW 0
+cur  DW 3
+firststr DB  "Single Shape:"
+ppwm        DB  "pwm"
+masor       DB  "triangle"
+mesima2       DB  "Vavg="
+mesima22      DB "[v]"
+
+sinus        DB  "sin               "
+sample_arr    DS16 64  ;arr of the semples
+Dsample_arr   DS16 63  ;first derived
+DDsample_arr  DS16 62  ;second derived 
+
+
+
+;-------------------------------------------------------------------------------
+            ;RSEG    CSTACK                  ; Begins a relocatable segment name of CSTACK - Define stack segment
+;-------------------------------------------------------------------------------
+            ORG    CodeSegStart                    ; Assemble to Flash memory -like void main in C
+;-----------------------------------------------------------------------------
+
+
+main         mov.w   #StackTosStart,SP        ; Initialize stack pointer
+StopWDT      mov.w   #WDTPW+WDTHOLD,&WDTCTL  
+             call    #SysConfig
+             bis.w   #GIE,SR
+             
+ 
+        
+;---------------------------- FSM_loop -------------------------------------
+
+
+
+;-------------------------------------------------------------------------------------------
+;              state0
+;--------------------------------------------------------------------------------------------
+state0       cmp     #0,state                  ;check if state0           
+             jnz     state1
+             //call    #LCD_CLR
+             bis.w   #CPUOFF+GIE,SR 
+             
+             
+;-------------------------------------------------------------------------------------------
+;              state1
+;--------------------------------------------------------------------------------------------
+state1       cmp     #1,state ;check if state1
+            
+             
+             jnz     state2
+             DINT                                ;disable cutoff (atomic function)
+
+             
+             push #firststr
+             call #print_string
+             call #Line2
+             clr R12
+             mov #3, cur
+             call #sampeling
+             
+                                                 ;infinite function
+             EINT                               ;enable cuoff
+             cmp     #2,state
+             JZ      state2
+             //cmp     #3,state
+             //JZ      state3
+             CLR     state
+             jmp     state0
+             
+             
+;-------------------------------------------------------------------------------------------
+;              state2
+;--------------------------------------------------------------------------------------------            
+             
+state2       cmp     #2,state 
+             //JNZ     state3                 ;check if state1                               
+             DINT                      ;disable cutoff (atomic function)
+             call #avg
+             
+             
+             
+             
+             EINT
+             clr state
+             jmp state0
+             
+             
+;-------------------------------------------------------------------------------------------
+;              state3
+;--------------------------------------------------------------------------------------------
+/*             
+state3       cmp     #3,state                  ;check if state1                               
+             DINT                               ;disable cutoff (atomic function)
+   
+   
+   
+   
+   
+   
+             EINT
+             clr state
+             jmp state0
+*/
+             
+             
+
+;----------------------------------------------------------------------------------------------
+ENDMOD             
+END             
